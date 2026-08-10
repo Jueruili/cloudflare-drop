@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -59,7 +60,7 @@ func runUpload(
 		result, err = uploadText(ctx, client, options, password, stdin)
 	}
 	if err != nil {
-		return UploadResponse{}, networkError(err)
+		return UploadResponse{}, err
 	}
 	expiresAt, err := normalizeDate(result.DueDate)
 	if err != nil {
@@ -95,14 +96,20 @@ func uploadText(
 		var err error
 		content, err = readBounded(stdin, maxTextSize)
 		if err != nil {
-			return dropclient.ShareResult{}, err
+			return dropclient.ShareResult{}, localError("LOCAL_VALIDATION_FAILED", err)
 		}
 	}
 	if len(content) == 0 {
-		return dropclient.ShareResult{}, fmt.Errorf("share content is empty")
+		return dropclient.ShareResult{}, localError(
+			"LOCAL_VALIDATION_FAILED",
+			fmt.Errorf("share content is empty"),
+		)
 	}
 	if !utf8.Valid(content) {
-		return dropclient.ShareResult{}, fmt.Errorf("text share must be valid UTF-8")
+		return dropclient.ShareResult{}, localError(
+			"LOCAL_VALIDATION_FAILED",
+			fmt.Errorf("text share must be valid UTF-8"),
+		)
 	}
 	metadata := dropclient.UploadMetadata{
 		Filename:  "text",
@@ -121,7 +128,7 @@ func uploadText(
 			password,
 			cryptoformat.Metadata{Type: "plain/string"},
 		); err != nil {
-			return dropclient.ShareResult{}, err
+			return dropclient.ShareResult{}, localError("LOCAL_ENCRYPTION_FAILED", err)
 		}
 		body = encrypted.Bytes()
 		metadata.Filename = "encrypted-file"
@@ -129,7 +136,11 @@ func uploadText(
 		metadata.PlaintextSize = int64(len(content))
 		metadata.Encrypted = true
 	}
-	return client.UploadDirect(ctx, metadata, bytes.NewReader(body))
+	result, err := client.UploadDirect(ctx, metadata, bytes.NewReader(body))
+	if err != nil {
+		return dropclient.ShareResult{}, networkError(err)
+	}
+	return result, nil
 }
 
 func uploadFile(
@@ -140,15 +151,18 @@ func uploadFile(
 ) (dropclient.ShareResult, error) {
 	file, err := os.Open(options.path)
 	if err != nil {
-		return dropclient.ShareResult{}, err
+		return dropclient.ShareResult{}, localError("LOCAL_IO_ERROR", err)
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return dropclient.ShareResult{}, err
+		return dropclient.ShareResult{}, localError("LOCAL_IO_ERROR", err)
 	}
 	if !info.Mode().IsRegular() || info.Size() <= 0 {
-		return dropclient.ShareResult{}, fmt.Errorf("upload source must be a non-empty regular file")
+		return dropclient.ShareResult{}, localError(
+			"LOCAL_VALIDATION_FAILED",
+			fmt.Errorf("upload source must be a non-empty regular file"),
+		)
 	}
 	filename := filepath.Base(options.path)
 	contentType := mime.TypeByExtension(strings.ToLower(filepath.Ext(filename)))
@@ -168,7 +182,7 @@ func uploadFile(
 			cryptoformat.Metadata{Filename: filename, Type: contentType},
 		)
 		if err != nil {
-			return dropclient.ShareResult{}, err
+			return dropclient.ShareResult{}, localError("LOCAL_ENCRYPTION_FAILED", err)
 		}
 		metadata.Filename = "encrypted-file"
 		metadata.Size = encryptedSize
@@ -190,26 +204,42 @@ func uploadFile(
 		result, uploadErr := client.UploadSession(ctx, metadata, reader)
 		_ = reader.CloseWithError(uploadErr)
 		encryptErr := <-encryptionDone
+		var bodyErr *dropclient.UploadBodyError
+		if encryptErr != nil && (uploadErr == nil || errors.As(uploadErr, &bodyErr)) {
+			return dropclient.ShareResult{}, localError("LOCAL_ENCRYPTION_FAILED", encryptErr)
+		}
 		if uploadErr != nil {
-			return dropclient.ShareResult{}, uploadErr
+			return dropclient.ShareResult{}, networkError(uploadErr)
 		}
 		if encryptErr != nil {
-			return dropclient.ShareResult{}, encryptErr
+			return dropclient.ShareResult{}, localError("LOCAL_ENCRYPTION_FAILED", encryptErr)
 		}
 		return result, nil
 	}
 	if info.Size() <= directUploadLimit {
-		return client.UploadDirect(ctx, metadata, file)
+		result, err := client.UploadDirect(ctx, metadata, file)
+		if err != nil {
+			return dropclient.ShareResult{}, networkError(err)
+		}
+		return result, nil
 	}
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {
-		return dropclient.ShareResult{}, err
+		return dropclient.ShareResult{}, localError("LOCAL_IO_ERROR", err)
 	}
 	metadata.Hash = hex.EncodeToString(hash.Sum(nil))
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return dropclient.ShareResult{}, err
+		return dropclient.ShareResult{}, localError("LOCAL_IO_ERROR", err)
 	}
-	return client.UploadSession(ctx, metadata, file)
+	result, err := client.UploadSession(ctx, metadata, file)
+	if err != nil {
+		var bodyErr *dropclient.UploadBodyError
+		if errors.As(err, &bodyErr) {
+			return dropclient.ShareResult{}, localError("LOCAL_IO_ERROR", err)
+		}
+		return dropclient.ShareResult{}, networkError(err)
+	}
+	return result, nil
 }
 
 func readBounded(reader io.Reader, limit int64) ([]byte, error) {

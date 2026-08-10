@@ -44,6 +44,13 @@ type uploadSession struct {
 	} `json:"uploadedParts"`
 }
 
+type UploadBodyError struct {
+	Err error
+}
+
+func (err *UploadBodyError) Error() string { return "read upload body: " + err.Err.Error() }
+func (err *UploadBodyError) Unwrap() error { return err.Err }
+
 func (client *Client) UploadDirect(
 	ctx context.Context,
 	metadata UploadMetadata,
@@ -162,7 +169,7 @@ func (client *Client) UploadSession(
 		}
 		part := buffer[:int(expected)]
 		if _, err := io.ReadFull(body, part); err != nil {
-			return ShareResult{}, fmt.Errorf("read upload part: %w", err)
+			return ShareResult{}, &UploadBodyError{Err: err}
 		}
 		if !uploaded[partNumber] {
 			if err := client.uploadPart(ctx, session.SessionID, partNumber, part); err != nil {
@@ -176,7 +183,7 @@ func (client *Client) UploadSession(
 	if count, err := io.ReadFull(body, probe); count > 0 {
 		return ShareResult{}, fmt.Errorf("upload body exceeds declared size")
 	} else if err != nil && err != io.EOF {
-		return ShareResult{}, err
+		return ShareResult{}, &UploadBodyError{Err: err}
 	}
 	return client.completeUploadSession(ctx, session.SessionID)
 }

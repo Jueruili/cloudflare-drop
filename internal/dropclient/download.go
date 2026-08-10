@@ -84,6 +84,8 @@ func (client *Client) Download(
 		if message == "" {
 			message = response.Status
 		}
+		message = strings.ReplaceAll(message, url.QueryEscape(share.Token), "[REDACTED]")
+		message = strings.ReplaceAll(message, share.Token, "[REDACTED]")
 		return nil, nil, &APIError{
 			Code:    "HTTP_ERROR",
 			Message: message,

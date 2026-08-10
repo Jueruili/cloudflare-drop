@@ -1,6 +1,6 @@
 ---
 name: cloudflare-drop
-description: Use this skill when the user wants to upload or share files or text through Cloudflare Drop, create a share code or encrypted share, retrieve or download by share code or URL, or asks to 分享、上传、使用分享码、加密分享、阅后即焚.
+description: Use this skill when the user wants to upload or share files or text through Cloudflare Drop, create a share code or encrypted share, retrieve or download by share code or URL, or asks to use Cloudflare Drop for 分享、上传、分享码、加密分享或阅后即焚.
 ---
 
 # Cloudflare Drop

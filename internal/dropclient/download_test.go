@@ -3,6 +3,7 @@ package dropclient
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -97,9 +98,9 @@ func TestDownloadReturnsRawBodyOnce(t *testing.T) {
 
 func TestDownloadRedactsTokenAndDoesNotRetryTransportFailure(t *testing.T) {
 	attempts := 0
-	httpClient := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+	httpClient := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		attempts += 1
-		return nil, errors.New("connection lost")
+		return nil, fmt.Errorf("connection lost for %s", request.URL.String())
 	})}
 	client, err := New("https://drop.example.com", httpClient)
 	if err != nil {
@@ -114,5 +115,24 @@ func TestDownloadRedactsTokenAndDoesNotRetryTransportFailure(t *testing.T) {
 	}
 	if attempts != 1 {
 		t.Fatalf("expected one download, got %d", attempts)
+	}
+}
+
+func TestDownloadRedactsTokenFromHTTPErrorBody(t *testing.T) {
+	const token = "super-secret-token"
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		http.Error(writer, "failed request "+request.URL.String(), http.StatusBadGateway)
+	}))
+	defer server.Close()
+	client, err := New(server.URL, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = client.Download(context.Background(), Share{
+		ID:    "file-id",
+		Token: token,
+	})
+	if err == nil || strings.Contains(err.Error(), token) {
+		t.Fatalf("download token leaked in HTTP error %v", err)
 	}
 }

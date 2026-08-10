@@ -160,10 +160,23 @@ func redactedTransportError(request *http.Request, err error) error {
 	redacted := *request.URL
 	redacted.RawQuery = ""
 	redacted.Fragment = ""
+	causeMessage := cause.Error()
+	if request.URL.RawQuery != "" {
+		causeMessage = strings.ReplaceAll(causeMessage, request.URL.RawQuery, "[REDACTED]")
+	}
+	for _, values := range request.URL.Query() {
+		for _, value := range values {
+			if value == "" {
+				continue
+			}
+			causeMessage = strings.ReplaceAll(causeMessage, url.QueryEscape(value), "[REDACTED]")
+			causeMessage = strings.ReplaceAll(causeMessage, value, "[REDACTED]")
+		}
+	}
 	return fmt.Errorf(
-		"request %s %s failed: %v",
+		"request %s %s failed: %s",
 		request.Method,
 		redacted.String(),
-		cause,
+		causeMessage,
 	)
 }

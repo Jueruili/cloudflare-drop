@@ -48,8 +48,12 @@ func runGet(ctx context.Context, args []string) (GetResponse, error) {
 		return getEncrypted(ctx, share, options, body)
 	}
 	if share.Type == "plain/string" {
-		content, err := readBounded(body, maxTextSize)
+		content, err := readBounded(&downloadReader{reader: body}, maxTextSize)
 		if err != nil {
+			var readErr *downloadReadError
+			if errors.As(err, &readErr) {
+				return GetResponse{}, networkError(err)
+			}
 			return GetResponse{}, integrityError("INVALID_TEXT_SHARE", err)
 		}
 		if !utf8.Valid(content) {
@@ -70,17 +74,32 @@ func runGet(ctx context.Context, args []string) (GetResponse, error) {
 
 	path, err := publishFile(options.output, share.Filename, func(file *os.File) error {
 		hash := sha256.New()
-		written, copyErr := io.Copy(io.MultiWriter(file, hash), body)
+		written, copyErr := io.Copy(
+			&localWriter{writer: io.MultiWriter(file, hash)},
+			&downloadReader{reader: body},
+		)
 		if copyErr != nil {
 			return copyErr
 		}
 		if share.Size >= 0 && written != share.Size {
-			return fmt.Errorf("download size mismatch")
+			return &downloadIntegrityError{err: fmt.Errorf("download size mismatch")}
 		}
-		return verifyDigest(hash.Sum(nil), share.Hash)
+		if err := verifyDigest(hash.Sum(nil), share.Hash); err != nil {
+			return &downloadIntegrityError{err: err}
+		}
+		return nil
 	})
 	if err != nil {
-		return GetResponse{}, integrityError("INTEGRITY_CHECK_FAILED", err)
+		var readErr *downloadReadError
+		var integrityErr *downloadIntegrityError
+		switch {
+		case errors.As(err, &readErr):
+			return GetResponse{}, networkError(err)
+		case errors.As(err, &integrityErr):
+			return GetResponse{}, integrityError("INTEGRITY_CHECK_FAILED", err)
+		default:
+			return GetResponse{}, localError("LOCAL_IO_ERROR", err)
+		}
 	}
 	return GetResponse{
 		OK: true, Operation: "get", Code: share.Code,
@@ -105,9 +124,16 @@ func getEncrypted(
 		_ = ciphertext.Close()
 		return GetResponse{}, localError("LOCAL_IO_ERROR", err)
 	}
-	if _, err := io.Copy(ciphertext, body); err != nil {
+	if _, err := io.Copy(
+		&localWriter{writer: ciphertext},
+		&downloadReader{reader: body},
+	); err != nil {
 		_ = ciphertext.Close()
-		return GetResponse{}, networkError(err)
+		var readErr *downloadReadError
+		if errors.As(err, &readErr) {
+			return GetResponse{}, networkError(err)
+		}
+		return GetResponse{}, localError("LOCAL_IO_ERROR", err)
 	}
 	if _, err := ciphertext.Seek(0, io.SeekStart); err != nil {
 		_ = ciphertext.Close()
@@ -200,6 +226,44 @@ func verifyDigest(actual []byte, expectedHex string) error {
 	}
 	return nil
 }
+
+type downloadReadError struct{ err error }
+
+func (err *downloadReadError) Error() string { return err.err.Error() }
+func (err *downloadReadError) Unwrap() error { return err.err }
+
+type downloadReader struct{ reader io.Reader }
+
+func (reader *downloadReader) Read(data []byte) (int, error) {
+	count, err := reader.reader.Read(data)
+	if err != nil && err != io.EOF {
+		return count, &downloadReadError{err: err}
+	}
+	return count, err
+}
+
+type localWriteError struct{ err error }
+
+func (err *localWriteError) Error() string { return err.err.Error() }
+func (err *localWriteError) Unwrap() error { return err.err }
+
+type localWriter struct{ writer io.Writer }
+
+func (writer *localWriter) Write(data []byte) (int, error) {
+	count, err := writer.writer.Write(data)
+	if err != nil {
+		return count, &localWriteError{err: err}
+	}
+	if count != len(data) {
+		return count, &localWriteError{err: io.ErrShortWrite}
+	}
+	return count, nil
+}
+
+type downloadIntegrityError struct{ err error }
+
+func (err *downloadIntegrityError) Error() string { return err.err.Error() }
+func (err *downloadIntegrityError) Unwrap() error { return err.err }
 
 func usageError(err error) *commandError {
 	return &commandError{exitCode: ExitUsage, code: "USAGE", message: err.Error()}

@@ -17,6 +17,7 @@ test('cloudflare-drop skill has a legal focused activation description', () => {
   expect(description.length).toBeLessThan(1024)
   expect(description).toMatch(/分享|分享码|加密分享/u)
   expect(description).toMatch(/upload|share code|encrypted share/iu)
+  expect(description).toContain('Cloudflare Drop for 分享')
   expect(source).toContain('Do not use')
   expect(source).toMatch(/generic file copy|其他云存储/iu)
 })
@@ -58,6 +59,17 @@ test('launcher maps every supported OS and architecture', () => {
   }
   expect(launcher).toContain('unsupported platform')
   expect(launcher).toContain('exec "$script_dir/bin/$target/cloudflare-drop"')
+})
+
+test('native build excludes environment-specific VCS metadata', () => {
+  const buildScript = readFileSync(
+    resolve('scripts/build-cloudflare-drop-skill'),
+    'utf8',
+  )
+  expect(buildScript).toContain('required_go_version=go1.25.5')
+  expect(buildScript).toContain('CGO_ENABLED=0')
+  expect(buildScript).toContain('-buildvcs=false')
+  expect(buildScript).toContain('-trimpath')
 })
 
 test('CLI reference documents commands and stable JSON channels', () => {

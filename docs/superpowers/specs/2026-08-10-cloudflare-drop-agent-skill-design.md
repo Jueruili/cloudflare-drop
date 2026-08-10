@@ -299,9 +299,9 @@ server failure, and 4 means integrity, format, or decryption failure.
 - Parse the application's JSON envelope on both successful and unsuccessful
   HTTP responses and preserve a safe server message in the structured error.
 - Apply finite connection, response-header, and overall operation timeouts.
-- Retry idempotent lookups and uncommitted upload parts with bounded backoff.
-  Do not automatically repeat a completed download because its token is
-  single-use.
+- Retry uncommitted upload parts with bounded backoff. Do not automatically
+  retry share-code lookups because an ephemeral lookup claims the share, and
+  do not repeat downloads because their token is single-use.
 - Never log passwords, Authorization-style values, download tokens, plaintext,
   or decrypted file contents to stderr.
 - Redact query strings when reporting download request errors.

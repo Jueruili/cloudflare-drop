@@ -81,15 +81,7 @@ func (client *Client) newRequest(
 func (client *Client) doAPI(request *http.Request, output any) error {
 	response, err := client.http.Do(request)
 	if err != nil {
-		cause := err
-		var urlError *url.Error
-		if errors.As(err, &urlError) {
-			cause = urlError.Err
-		}
-		redacted := *request.URL
-		redacted.RawQuery = ""
-		redacted.Fragment = ""
-		return fmt.Errorf("request %s %s failed: %v", request.Method, redacted.String(), cause)
+		return redactedTransportError(request, err)
 	}
 	defer response.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxEnvelopeSize+1))
@@ -157,4 +149,21 @@ func (client *Client) doAPI(request *http.Request, output any) error {
 		}
 	}
 	return nil
+}
+
+func redactedTransportError(request *http.Request, err error) error {
+	cause := err
+	var urlError *url.Error
+	if errors.As(err, &urlError) {
+		cause = urlError.Err
+	}
+	redacted := *request.URL
+	redacted.RawQuery = ""
+	redacted.Fragment = ""
+	return fmt.Errorf(
+		"request %s %s failed: %v",
+		request.Method,
+		redacted.String(),
+		cause,
+	)
 }

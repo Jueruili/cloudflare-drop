@@ -110,7 +110,7 @@ func isLocalHostname(hostname string) bool {
 	}
 }
 
-func shareURL(server *url.URL, code string) string {
+func ShareURL(server *url.URL, code string) string {
 	result := *server
 	result.Path = "/"
 	query := url.Values{}

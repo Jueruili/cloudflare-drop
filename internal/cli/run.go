@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
+	"time"
 )
 
 func Run(
@@ -23,8 +25,23 @@ func Run(
 		}, ExitOK)
 	}
 
-	if len(args) > 0 && (args[0] == "upload" || args[0] == "get") {
-		return writeError(stdout, ExitUsage, "NOT_IMPLEMENTED", fmt.Sprintf("command not implemented: %s", args[0]))
+	if len(args) > 0 && args[0] == "upload" {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		response, err := runUpload(ctx, args[1:], stdin)
+		if err != nil {
+			return writeCommandError(stdout, err)
+		}
+		return writeResponse(stdout, response, ExitOK)
+	}
+	if len(args) > 0 && args[0] == "get" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		response, err := runGet(ctx, args[1:])
+		if err != nil {
+			return writeCommandError(stdout, err)
+		}
+		return writeResponse(stdout, response, ExitOK)
 	}
 
 	command := ""
@@ -35,6 +52,19 @@ func Run(
 		return writeError(stdout, ExitUsage, "USAGE", "command required")
 	}
 	return writeError(stdout, ExitUsage, "USAGE", "unknown command: "+command)
+}
+
+func writeCommandError(stdout io.Writer, err error) int {
+	var commandErr *commandError
+	if !errors.As(err, &commandErr) {
+		commandErr = localError("LOCAL_ERROR", err)
+	}
+	return writeError(
+		stdout,
+		commandErr.exitCode,
+		commandErr.code,
+		commandErr.message,
+	)
 }
 
 func writeResponse(stdout io.Writer, response any, code int) int {

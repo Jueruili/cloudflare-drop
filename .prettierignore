@@ -6,6 +6,8 @@ node_modules
 go.mod
 go.sum
 tests/fixtures/v2/*.bin
+skills/cloudflare-drop/scripts/cloudflare-drop
+skills/cloudflare-drop/scripts/bin/
 *.toml
 *.sh
 /assets

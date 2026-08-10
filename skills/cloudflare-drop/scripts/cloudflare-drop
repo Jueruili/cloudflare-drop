@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+platform=$(uname -s)
+architecture=$(uname -m)
+
+case "$platform:$architecture" in
+  Darwin:x86_64) target=darwin-amd64 ;;
+  Darwin:arm64) target=darwin-arm64 ;;
+  Linux:x86_64) target=linux-amd64 ;;
+  Linux:aarch64|Linux:arm64) target=linux-arm64 ;;
+  *)
+    printf '{"ok":false,"error":{"code":"UNSUPPORTED_PLATFORM","message":"unsupported platform: %s/%s"}}\n' "$platform" "$architecture"
+    exit 2
+    ;;
+esac
+
+binary="$script_dir/bin/$target/cloudflare-drop"
+if [ ! -x "$binary" ]; then
+  printf '{"ok":false,"error":{"code":"MISSING_BINARY","message":"bundled CLI binary is missing or not executable"}}\n'
+  exit 2
+fi
+
+exec "$script_dir/bin/$target/cloudflare-drop" "$@"

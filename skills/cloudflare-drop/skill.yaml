@@ -1,0 +1,20 @@
+name: cloudflare-drop
+version: 0.1.0
+description: Upload and retrieve Cloudflare Drop shares with a bundled native CLI.
+author: cloudflare-drop
+entry: SKILL.md
+platforms:
+  - claude
+  - codex
+tools:
+  - shell
+mcp: []
+dependencies:
+  npm: []
+  python: []
+permissions:
+  filesystem:
+    - read
+    - write
+  network:
+    - '*'

@@ -5,6 +5,7 @@ node_modules
 **/*.go
 go.mod
 go.sum
+tests/fixtures/v2/*.bin
 *.toml
 *.sh
 /assets

@@ -2,6 +2,9 @@
 dist
 node_modules
 /data/migrations
+**/*.go
+go.mod
+go.sum
 *.toml
 *.sh
 /assets

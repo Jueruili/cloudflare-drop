@@ -43,7 +43,7 @@ test('skill manifest declares portable local execution', () => {
   expect(manifest).toContain('- claude')
   expect(manifest).toContain('- codex')
   expect(manifest).toContain('- shell')
-  expect(manifest).toContain('- "*"')
+  expect(manifest).toMatch(/- ['"]\*['"]/u)
 })
 
 test('launcher maps every supported OS and architecture', () => {

@@ -18,10 +18,16 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --prod --audit-level=high
       - run: pnpm test
       - run: pnpm exec tsc -p tsconfig.worker.json --noEmit
+      - run: go test ./...
+      - run: VERSION=0.1.0 scripts/build-cloudflare-drop-skill
+      - run: git diff --exit-code -- skills/cloudflare-drop/scripts/bin
       - run: pnpm build:web
   deploy:
     needs: verify

@@ -1,0 +1,63 @@
+#!/bin/sh
+set -eu
+
+required_go_version=go1.25.5
+actual_go_version=$(go env GOVERSION)
+if [ "$actual_go_version" != "$required_go_version" ]; then
+  printf 'cloudflare-drop: Go 1.25.5 is required (found %s)\n' "$actual_go_version" >&2
+  exit 1
+fi
+
+repository_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+binary_dir="$repository_dir/skills/cloudflare-drop/scripts/bin"
+version=${VERSION:-dev}
+build_dir=$(mktemp -d "${TMPDIR:-/tmp}/cloudflare-drop-build.XXXXXX")
+trap 'rm -rf "$build_dir"' EXIT HUP INT TERM
+
+build_target() {
+  target=$1
+  goos=$2
+  goarch=$3
+  output="$build_dir/$target/cloudflare-drop"
+
+  mkdir -p "$(dirname -- "$output")"
+  (
+    cd "$repository_dir"
+    CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+      go build -trimpath -ldflags "-s -w -X main.version=$version" \
+      -o "$output" ./cmd/cloudflare-drop
+  )
+}
+
+build_target darwin-amd64 darwin amd64
+build_target darwin-arm64 darwin arm64
+build_target linux-amd64 linux amd64
+build_target linux-arm64 linux arm64
+
+(
+  cd "$build_dir"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum \
+      darwin-amd64/cloudflare-drop \
+      darwin-arm64/cloudflare-drop \
+      linux-amd64/cloudflare-drop \
+      linux-arm64/cloudflare-drop >SHA256SUMS
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 \
+      darwin-amd64/cloudflare-drop \
+      darwin-arm64/cloudflare-drop \
+      linux-amd64/cloudflare-drop \
+      linux-arm64/cloudflare-drop >SHA256SUMS
+  else
+    printf 'cloudflare-drop: sha256sum or shasum is required\n' >&2
+    exit 1
+  fi
+)
+
+for target in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64; do
+  destination="$binary_dir/$target/cloudflare-drop"
+  mkdir -p "$(dirname -- "$destination")"
+  mv "$build_dir/$target/cloudflare-drop" "$destination"
+  chmod 755 "$destination"
+done
+mv "$build_dir/SHA256SUMS" "$binary_dir/SHA256SUMS"

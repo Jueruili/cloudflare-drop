@@ -29,6 +29,23 @@
 
 执行 `pnpm start` 后，Vite 页面运行在 `http://127.0.0.1:3333`，Worker API 运行在 `http://127.0.0.1:8787`。请通过 Vite 地址打开页面；`/api` 和 `/files` 请求会自动代理到 Worker。直接访问 Worker 的页面路径会重定向到 Vite，避免开发代理携带浏览器 Host 时触发 Vite 500。
 
+## Agent Skill / CLI
+
+仓库内置 [`skills/cloudflare-drop`](skills/cloudflare-drop) Agent Skill，供 Codex、Claude 等通过命令行操作任意已部署的 Cloudflare Drop 实例。Skill 已包含 macOS/Linux、amd64/arm64 四个平台的原生 CLI，无需安装 Go、Node.js 或其他运行时依赖。
+
+将实例地址传给 `--server`，或设置一次环境变量：
+
+```bash
+export CLOUDFLARE_DROP_URL=https://drop.example.com
+skills/cloudflare-drop/scripts/cloudflare-drop upload ./report.pdf
+skills/cloudflare-drop/scripts/cloudflare-drop upload --text "临时内容" --encrypt --ephemeral
+skills/cloudflare-drop/scripts/cloudflare-drop get 123456 --output ./downloads/
+```
+
+CLI 支持文件、文本和标准输入上传，以及通过六位分享码或分享 URL 获取内容。加密分享仅使用 V2 格式，不兼容历史 V1；省略密码时会用安全随机数自动生成一个 24 位大小写字母和数字密码，并只在创建结果中返回一次。
+
+`--ephemeral` 表示阅后即焚，但消费时点是第一次查询分享码，而不是成功完成下载。查询后的网络失败、缺少密码或解密失败都可能让该分享无法再次获取。
+
 ## 配置 GitHub Actions
 
 默认会自动确保 D1、KV，并尝试启用 R2：部署脚本会按默认名称查找资源，存在就复用，不存在就创建，然后生成正确的 Worker binding。KV 始终用于分享元数据、短期下载令牌和 KV 回退存储；R2 可用时会绑定到 `FILES`，不可用时默认回退 KV。

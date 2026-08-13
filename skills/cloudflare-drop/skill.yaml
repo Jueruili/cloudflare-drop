@@ -1,5 +1,5 @@
 name: cloudflare-drop
-version: 0.1.0
+version: 0.1.1
 description: Upload and retrieve Cloudflare Drop shares with a bundled native CLI.
 author: cloudflare-drop
 entry: SKILL.md

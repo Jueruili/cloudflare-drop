@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -87,6 +89,28 @@ func TestUploadDirectStreamsMultipartMetadata(t *testing.T) {
 	}
 	if result.Code != "123456" || !result.Encrypted || !result.Ephemeral {
 		t.Fatalf("unexpected result %#v", result)
+	}
+}
+
+func TestWriteMultipartUploadQuotesFileDispositionParameters(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writeMultipartUpload(writer, UploadMetadata{
+		Filename: "report\\\".deb\r\nX-Injected: yes",
+		Type:     "application/x-debian-package",
+		Size:     7,
+	}, bytes.NewBufferString("content")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	want := `Content-Disposition: form-data; name="file"; filename="report\\\".debX-Injected: yes"`
+	if !strings.Contains(body.String(), want) {
+		t.Fatalf("multipart file disposition must quote parameters:\n%s", body.String())
+	}
+	if strings.Contains(body.String(), "\r\nX-Injected:") {
+		t.Fatalf("multipart filename injected a header:\n%s", body.String())
 	}
 }
 

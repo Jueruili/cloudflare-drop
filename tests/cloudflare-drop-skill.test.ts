@@ -39,7 +39,7 @@ test('skill workflow captures server password and ephemeral safety rules', () =>
 test('skill manifest declares portable local execution', () => {
   const manifest = readSkillFile('skill.yaml')
   expect(manifest).toContain('name: cloudflare-drop')
-  expect(manifest).toContain('version: 0.1.0')
+  expect(manifest).toContain('version: 0.1.1')
   expect(manifest).toContain('entry: SKILL.md')
   expect(manifest).toContain('- claude')
   expect(manifest).toContain('- codex')

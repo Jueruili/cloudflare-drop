@@ -7,11 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -99,10 +99,7 @@ func writeMultipartUpload(
 	header := make(textproto.MIMEHeader)
 	header.Set(
 		"Content-Disposition",
-		mime.FormatMediaType("form-data", map[string]string{
-			"name":     "file",
-			"filename": filename,
-		}),
+		fileContentDisposition("file", filename),
 	)
 	header.Set("Content-Type", contentType)
 	part, err := writer.CreatePart(header)
@@ -128,6 +125,18 @@ func writeMultipartUpload(
 		}
 	}
 	return nil
+}
+
+func fileContentDisposition(fieldName, filename string) string {
+	escape := func(value string) string {
+		value = strings.NewReplacer("\r", "", "\n", "").Replace(value)
+		return strings.NewReplacer("\\", "\\\\", `"`, `\"`).Replace(value)
+	}
+	return fmt.Sprintf(
+		`form-data; name="%s"; filename="%s"`,
+		escape(fieldName),
+		escape(filename),
+	)
 }
 
 func jsonString(value string) string {

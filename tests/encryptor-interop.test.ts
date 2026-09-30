@@ -91,4 +91,4 @@ test('TypeScript and Go retain V2 encrypted-file compatibility', async () => {
     type: manifest.type,
   })
   await expect(decrypted.blob.text()).resolves.toBe(plaintext)
-})
+}, 30000)

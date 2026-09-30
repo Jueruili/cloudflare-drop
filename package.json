@@ -81,5 +81,12 @@
       "prettier --write",
       "eslint --fix --no-warn-ignored"
     ]
+  },
+  "pnpm": {
+    "overrides": {
+      "browserslist@<=4.28.6": "^4.28.7",
+      "js-yaml@<4.3.2": "^4.3.2",
+      "nanoid@<3.3.18": "^3.3.18"
+    }
   }
 }
